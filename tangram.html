@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>칠교 퍼즐</title>
+<style>
+:root{--bg:#efe9dc;--fg:#26293f;--card:#fbf8f1;--board:#e2dac6;--tray:#d4cab0;--sil:#c9bfa6;--line:rgba(255,255,255,.7);--on:#fff;--ac:#2d3150;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14151c;--fg:#ecebe6;--card:#232532;--board:#1d1f2a;--tray:#292b39;--sil:#3a3f63;--ac:#c9ccf0;--on:#14151c}}
+:root[data-theme="dark"]{--bg:#14151c;--fg:#ecebe6;--card:#232532;--board:#1d1f2a;--tray:#292b39;--sil:#3a3f63;--ac:#c9ccf0;--on:#14151c}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:"Gowun Dodum","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;-webkit-user-select:none;user-select:none}
+#app{height:100%;display:flex;flex-direction:column;max-width:680px;margin:0 auto;padding:6px 4px;gap:6px;box-sizing:border-box}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:20px;margin:0;letter-spacing:.02em}
+#info{font-size:13px;opacity:.8;text-align:right;line-height:1.35}
+.seg{display:flex;background:var(--card);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:none;color:var(--fg);font:inherit;font-size:15px;padding:8px 0;border-radius:9px;cursor:pointer}
+.seg button.on{background:var(--ac);color:var(--on)}
+#stage{position:relative;flex:1;min-height:0}
+svg{width:100%;height:100%;display:block;touch-action:none}
+.t{fill:var(--tray)}.b{fill:var(--board);stroke:var(--fg);stroke-opacity:.4;stroke-width:.4;stroke-dasharray:1.5 1}.lb{font-size:2.8px;fill:var(--fg);opacity:.6;pointer-events:none}
+.pc{cursor:grab;stroke:rgba(0,0,0,.3);stroke-width:.3;stroke-linejoin:round}
+.pc.sel{stroke:var(--fg);stroke-width:.7}
+#gh{fill:none;stroke:#ffd166;stroke-width:1.2;display:none;pointer-events:none}
+#gh.f{display:block;animation:bl .35s ease-in-out 4 alternate}
+@keyframes bl{from{opacity:.2}to{opacity:1}}
+.bar{display:flex;gap:8px}
+.bar button{flex:1;border:0;border-radius:12px;background:var(--card);color:var(--fg);font:inherit;font-size:15px;padding:12px 0;cursor:pointer}
+.bar button:active{transform:scale(.97)}
+.bar button:disabled{opacity:.35}
+#win{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(20,21,28,.6);border-radius:14px;color:#fff;text-align:center}
+#win.s{display:flex}
+#win b{font-size:28px}
+#win button{border:0;border-radius:12px;background:#ffd166;color:#26293f;font:inherit;font-size:17px;padding:12px 26px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+<header><h1>🧩 칠교 퍼즐</h1><div id="info"></div></header>
+<div class="seg" id="seg"><button data-d="easy" class="on">쉬움</button><button data-d="normal">보통</button><button data-d="hard">어려움</button></div>
+<div id="stage"><svg id="sv" viewBox="0 0 100 140" preserveAspectRatio="xMidYMid meet"></svg>
+<div id="win"><b>🎉 완성!</b><span id="wt"></span><button id="nx">다음 도안</button></div></div>
+<div class="bar"><button id="bR">⟳ 회전</button><button id="bF">⇋ 뒤집기</button><button id="bH">💡 힌트</button><button id="bN">새 도안</button></div>
+</div>
+<script>
+const R2=Math.SQRT2,H=R2/2;
+const TYPES=[
+{n:"L",v:[[0,0],[2,0],[0,2]],c:"#ef476f"},
+{n:"L",v:[[0,0],[2,0],[0,2]],c:"#118ab2"},
+{n:"M",v:[[0,0],[R2,0],[0,R2]],c:"#06d6a0"},
+{n:"S",v:[[0,0],[1,0],[0,1]],c:"#ffd166"},
+{n:"S",v:[[0,0],[1,0],[0,1]],c:"#9b5de5"},
+{n:"Q",v:[[0,0],[1,0],[1,1],[0,1]],c:"#f78c3a"},
+{n:"P",v:[[0,0],[R2,0],[R2+H,H],[H,H]],c:"#f15bb5"}];
+const $=s=>document.querySelector(s),svg=$("#sv"),CX=50,CY=71;
+let diff="easy",S=6.5,tg=[],pcs=[],occ=[],sel=-1,seed=0,t0=0,tm=null,done=false,drag=null,hintT=null;
+function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function tf(v,p,s=1){const a=p.r*Math.PI/4,c=Math.cos(a),n=Math.sin(a);return v.map(([x,y])=>{x*=s*(p.f?-1:1);y*=s;return[x*c-y*n+p.x,x*n+y*c+p.y]})}
+function area(P){let s=0;for(let i=0;i<P.length;i++){const j=(i+1)%P.length;s+=P[i][0]*P[j][1]-P[j][0]*P[i][1]}return s/2}
+function hullArea(pts){pts=pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);const h=[];for(const p of pts){while(h.length>=2&&cr(h[h.length-2],h[h.length-1],p)<=1e-9)h.pop();h.push(p)}const n=h.length+1;for(let i=pts.length-2;i>=0;i--){const p=pts[i];while(h.length>=n&&cr(h[h.length-2],h[h.length-1],p)<=1e-9)h.pop();h.push(p)}h.pop();return Math.abs(area(h))}
+function overlap(a,b){for(const P of[a,b])for(let i=0;i<P.length;i++){const j=(i+1)%P.length;let nx=P[j][1]-P[i][1],ny=P[i][0]-P[j][0];const l=Math.hypot(nx,ny);nx/=l;ny/=l;let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;for(const q of a){const d=q[0]*nx+q[1]*ny;a0=Math.min(a0,d);a1=Math.max(a1,d)}for(const q of b){const d=q[0]*nx+q[1]*ny;b0=Math.min(b0,d);b1=Math.max(b1,d)}if(a1<=b0+1e-4||b1<=a0+1e-4)return false}return true}
+function gen(r){
+for(let tries=0;tries<300;tries++){
+const order=[0,1,2,3,4,5,6].sort(()=>r()-.5),poses=[],polys=[];let ok=true;
+for(let k=0;k<7&&ok;k++){const ti=order[k],T=TYPES[ti];
+if(k==0){const p={f:r()<.5?1:0,r:Math.floor(r()*8),x:0,y:0};poses[ti]=p;polys[ti]=tf(T.v,p);continue}
+let placed=false;
+for(let a=0;a<80&&!placed;a++){
+const pj=order[Math.floor(r()*k)],P=polys[pj],i=Math.floor(r()*P.length),A=P[i],B=P[(i+1)%P.length];
+const f=r()<.5?1:0,lv=tf(T.v,{f,r:0,x:0,y:0}),e=Math.floor(r()*lv.length);
+const same=area(P)*(f?-1:1)>0;
+const dx=same?A[0]-B[0]:B[0]-A[0],dy=same?A[1]-B[1]:B[1]-A[1],S0=same?B:A,len=Math.hypot(dx,dy);
+const C=lv[e],D=lv[(e+1)%lv.length];
+let rr=Math.round((Math.atan2(dy,dx)-Math.atan2(D[1]-C[1],D[0]-C[0]))/(Math.PI/4));rr=((rr%8)+8)%8;
+const p={f,r:rr,x:0,y:0},rv=tf(T.v,p),C2=rv[e],D2=rv[(e+1)%rv.length],lc=Math.hypot(D2[0]-C2[0],D2[1]-C2[1]);
+if((D2[0]-C2[0])*dx+(D2[1]-C2[1])*dy<len*lc*.999)continue;
+const ch=[0,len-lc,(len-lc)/2],t=ch[Math.floor(r()*3)],ux=dx/len,uy=dy/len;
+p.x=S0[0]+ux*t-C2[0];p.y=S0[1]+uy*t-C2[1];
+const poly=tf(T.v,p);let bad=false;
+for(let m=0;m<k;m++)if(overlap(poly,polys[order[m]])){bad=true;break}
+if(!bad){poses[ti]=p;polys[ti]=poly;placed=true}}
+if(!placed)ok=false}
+if(ok){const all=polys.flat();return{poses,polys,s:8/hullArea(all)}}}
+return null}
+const pts=v=>v.map(a=>a[0].toFixed(2)+","+a[1].toFixed(2)).join(" ");
+const cen=v=>[v.reduce((s,a)=>s+a[0],0)/v.length,v.reduce((s,a)=>s+a[1],0)/v.length];
+function build(){
+const r=rng(seed);let cs=[];
+while(cs.length<10){const g=gen(r);if(g)cs.push(g)}
+cs.sort((a,b)=>b.s-a.s);
+const g=cs[diff=="easy"?0:diff=="hard"?cs.length-1:cs.length>>1];
+const all=g.polys.flat(),xs=all.map(a=>a[0]),ys=all.map(a=>a[1]);
+const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+S=Math.min(10,62/Math.max(x1-x0,y1-y0));
+const mx=(x0+x1)/2,my=(y0+y1)/2;
+tg=g.poses.map((p,ti)=>{const q={f:p.f,r:p.r,x:S*(p.x-mx)+CX,y:S*(p.y-my)+CY};return{n:TYPES[ti].n,c:TYPES[ti].c,pose:q,verts:tf(TYPES[ti].v,q,S)}});
+occ=tg.map(()=>-1);
+const sh=a=>a.sort(()=>r()-.5),SL=[];
+sh([0,1,2]).forEach((t,k)=>SL[t]=[[17,19],[50,17],[83,19]][k]);
+sh([3,6]).forEach((t,k)=>SL[t]=[[25,123],[72,123]][k]);
+sh([4,5]).forEach((t,k)=>SL[t]=[[8,71],[92,71]][k]);
+pcs=TYPES.map((T,ti)=>{const q=tg[ti].pose,p={ti,f:diff=="hard"?(r()<.5?1:0):q.f,r:diff=="easy"?q.r:Math.floor(r()*8),x:0,y:0,slot:-1},c=SL[ti],cc=tf([cen(T.v)],p,S)[0];
+p.x=c[0]+(r()-.5)*3-cc[0];p.y=c[1]+(r()-.5)*3-cc[1];
+const v=tf(T.v,p,S),X=v.map(a=>a[0]),Y=v.map(a=>a[1]);
+const mnx=Math.min(...X),mxx=Math.max(...X),mny=Math.min(...Y),mxy=Math.max(...Y);
+if(mnx<3)p.x+=3-mnx;if(mxx>97)p.x-=mxx-97;if(mny<3)p.y+=3-mny;if(mxy>137)p.y-=mxy-137;return p});
+let h=`<rect class="t" x="1" y="1" width="98" height="138" rx="5"/><rect class="b" x="16" y="38" width="68" height="66" rx="3"/><text class="lb" x="4" y="5.5">조각 영역</text><text class="lb" x="18" y="41.5">도안 영역</text><g>`;
+for(const t of tg){const col=diff=="hard"?"var(--sil)":`color-mix(in srgb,${t.c} 42%,var(--board))`;h+=`<polygon points="${pts(t.verts)}" style="fill:${col};stroke:${col};stroke-width:.5;stroke-linejoin:round"/>`}
+if(diff=="easy")for(const t of tg)h+=`<polygon points="${pts(t.verts)}" style="fill:none;stroke:var(--line);stroke-width:.35;stroke-dasharray:1 .8"/>`;
+h+=`</g><polygon id="gh"/><g id="gp">`;
+pcs.forEach((p,i)=>h+=`<polygon class="pc" data-i="${i}" style="fill:${TYPES[p.ti].c}"/>`);
+svg.innerHTML=h+`</g>`;
+pcs.forEach((_,i)=>draw(i));
+sel=-1;done=false;$("#win").classList.remove("s");
+$("#bH").disabled=diff=="hard";$("#bR").disabled=diff=="easy";$("#bF").disabled=diff!="hard";
+t0=Date.now();clearInterval(tm);tm=setInterval(info,1000);info()}
+const el=i=>svg.querySelector(`.pc[data-i="${i}"]`);
+function draw(i){const p=pcs[i];el(i).setAttribute("points",pts(tf(TYPES[p.ti].v,p,S)))}
+function fmt(){const s=Math.floor((Date.now()-t0)/1000);return String(s/60|0).padStart(2,"0")+":"+String(s%60).padStart(2,"0")}
+function info(){const n=occ.filter(o=>o>=0).length;$("#info").innerHTML=`도안 #${seed}<br>${n}/7 완료 · ${fmt()}`}
+function close(a,b,tol){const ok=(x,y)=>x.every(p=>y.some(q=>Math.hypot(p[0]-q[0],p[1]-q[1])<tol));return ok(a,b)&&ok(b,a)}
+function near(i){const p=pcs[i],T=TYPES[p.ti],pv=tf(T.v,p,S),tol={easy:7,normal:5.5,hard:4.5}[diff];
+for(let k=0;k<tg.length;k++){if(tg[k].n===T.n&&occ[k]<0&&close(pv,tg[k].verts,tol))return k}return -1}
+function snap(i){const k=near(i);if(k<0)return false;const p=pcs[i];Object.assign(p,tg[k].pose);p.slot=k;occ[k]=i;draw(i);return true}
+function unplace(i){const p=pcs[i];if(p.slot>=0){occ[p.slot]=-1;p.slot=-1}}
+function turn(i,d,flip){const p=pcs[i],c=cen(TYPES[p.ti].v),a=tf([c],p,S)[0];
+if(flip)p.f=1-p.f;else p.r=(p.r+d+8)%8;
+const b=tf([c],p,S)[0];p.x+=a[0]-b[0];p.y+=a[1]-b[1];draw(i)}
+function mark(){svg.querySelectorAll(".pc").forEach(e=>e.classList.toggle("sel",+e.dataset.i===sel))}
+function after(i){snap(i);info();if(occ.every(o=>o>=0))win()}
+function win(){done=true;clearInterval(tm);$("#wt").textContent="걸린 시간 "+fmt()+" · 도안 #"+seed;$("#win").classList.add("s")}
+function pt(e){const q=svg.createSVGPoint();q.x=e.clientX;q.y=e.clientY;return q.matrixTransform(svg.getScreenCTM().inverse())}
+svg.addEventListener("pointerdown",e=>{const c=e.target.closest(".pc");if(!c||done)return;
+const i=+c.dataset.i,q=pt(e),p=pcs[i];sel=i;mark();c.parentNode.appendChild(c);
+drag={i,cx:e.clientX,cy:e.clientY,qx:q.x,qy:q.y,px:p.x,py:p.y,moved:false,was:p.slot>=0};
+svg.setPointerCapture(e.pointerId);e.preventDefault()});
+svg.addEventListener("pointermove",e=>{if(!drag)return;
+if(!drag.moved&&Math.hypot(e.clientX-drag.cx,e.clientY-drag.cy)<6)return;
+if(!drag.moved){drag.moved=true;unplace(drag.i);info()}
+const q=pt(e),p=pcs[drag.i];p.x=drag.px+q.x-drag.qx;p.y=drag.py+q.y-drag.qy;draw(drag.i);
+const g=$("#gh"),k=diff=="hard"?-1:near(drag.i);
+if(k>=0){g.setAttribute("points",pts(tg[k].verts));g.classList.remove("f");g.style.display="block"}else g.style.display=""});
+function up(){if(!drag)return;$("#gh").style.display="";const{i,moved,was}=drag;drag=null;
+if(moved)after(i);else if(!was&&diff!="easy"){turn(i,1);after(i)}}
+svg.addEventListener("pointerup",up);svg.addEventListener("pointercancel",up);
+$("#bR").onclick=()=>{if(diff!="easy"&&sel>=0&&!done&&pcs[sel].slot<0){turn(sel,1);after(sel)}};
+$("#bF").onclick=()=>{if(diff=="hard"&&sel>=0&&!done&&pcs[sel].slot<0){turn(sel,0,true);after(sel)}};
+$("#bH").onclick=()=>{if(done||diff=="hard")return;
+let i=sel>=0&&pcs[sel].slot<0?sel:pcs.findIndex(p=>p.slot<0);if(i<0)return;
+const n=TYPES[pcs[i].ti].n,k=tg.findIndex((t,j)=>t.n===n&&occ[j]<0);if(k<0)return;
+const g=$("#gh");g.setAttribute("points",pts(tg[k].verts));g.classList.remove("f");void g.getBoundingClientRect();g.classList.add("f");
+clearTimeout(hintT);hintT=setTimeout(()=>g.classList.remove("f"),1500)};
+function fresh(){seed=Math.floor(Math.random()*90000)+10000;build()}
+$("#bN").onclick=fresh;$("#nx").onclick=fresh;
+$("#seg").onclick=e=>{const b=e.target.closest("button");if(!b)return;diff=b.dataset.d;
+document.querySelectorAll("#seg button").forEach(x=>x.classList.toggle("on",x===b));fresh()};
+fresh();
+</script>
+</body>
+</html>
