@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>숫자 색칠 픽셀아트 워크지 만들기</title>
+<style>
+:root{--bg:#fffaf0;--fg:#2b2b2b;--card:#fff;--line:#555;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1b22;--fg:#f1f1f1;--card:#2a2933;--line:#aaa}}
+:root[data-theme="dark"]{--bg:#1c1b22;--fg:#f1f1f1;--card:#2a2933;--line:#aaa}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Apple SD Gothic Neo","Noto Sans KR",sans-serif;text-align:center;padding:14px}
+h1{font-size:1.3rem;margin:6px 0 10px}
+.ctrl{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;align-items:center;margin:8px 0}
+select,button.t,label.t{font:inherit;padding:8px 12px;border-radius:10px;border:2px solid var(--line);background:var(--card);color:var(--fg)}
+button.t{cursor:pointer;font-weight:700}
+button.main{background:#ffb703;color:#222;border-color:#c98a00}
+.page{background:#fff;color:#222;max-width:500px;margin:16px auto;padding:14px;border:1px solid #bbb;border-radius:8px}
+.page h2{margin:2px 0 6px;font-size:1.1rem}
+.name{display:flex;justify-content:center;gap:14px;font-size:.9rem;margin-bottom:6px}
+.name span{border-bottom:1px solid #555;min-width:80px;display:inline-block}
+.leg{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin:8px 0}
+.sw{display:flex;align-items:center;gap:4px;border:2px solid #555;border-radius:8px;padding:3px 7px;font-weight:700;cursor:pointer;background:#fff}
+.sw i{width:20px;height:20px;border-radius:5px;border:1px solid #555;display:inline-block}
+.sw.on{outline:3px solid #ffb703}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);width:100%;max-width:440px;margin:8px auto;border:2px solid #555}
+.c{aspect-ratio:1;border:1px solid #aaa;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:clamp(11px,3.4vw,18px);background:#fff;cursor:pointer;user-select:none}
+.ans .c[data-n]{background:var(--k);color:var(--t)}
+.hint{font-size:.85rem;opacity:.8}
+@media print{
+ body{background:#fff;padding:0}.ctrl,.hint,h1{display:none}
+ .page{break-after:page;border:0;margin:0 auto;max-width:none;padding:10mm}
+ .grid{max-width:150mm}.c{font-size:16pt;cursor:default}.sw{cursor:default}.sw.on{outline:none}
+ .page *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<h1>🎨 숫자 색칠 픽셀아트 만들기</h1>
+<div class="ctrl">
+ <label class="t">장수 <select id="n"></select></label>
+ <label class="t">주제 <select id="cat"><option value="all">전체</option><option value="a">동물</option><option value="d">공룡</option><option value="v">자동차·탈것</option><option value="x">기타 (하트·꽃·집 등)</option></select></label>
+ <label class="t"><input type="checkbox" id="ans"> 정답 보기</label>
+</div>
+<div class="ctrl">
+ <button class="t main" id="go">✨ 새로 만들기</button>
+ <button class="t" onclick="window.print()">🖨️ 인쇄</button>
+</div>
+<p class="hint">누를 때마다 그림과 색 배치가 새로 바뀌어요. 색을 고른 뒤 칸을 눌러 화면에서 칠할 수도 있어요.</p>
+<div id="pages"></div>
+<script>
+const COL={1:["빨강","#e63946","#fff"],2:["주황","#fb8500","#222"],3:["노랑","#ffd60a","#222"],4:["초록","#2a9d3f","#fff"],5:["파랑","#1e88e5","#fff"],6:["남색","#3f3fa8","#fff"],7:["보라","#8e44ad","#fff"],8:["분홍","#ff8fb8","#222"],9:["검정","#111","#fff"]};
+// b,a,c = 무작위 색, e = 항상 검정(9), . = 빈칸
+const T=[
+{t:"a",n:"고양이",g:["bb........bb","bbb......bbb","bbbbbbbbbbbb","bbbbbbbbbbbb","bbebbbbbbebb","bbebbbbbbebb","bbbbbaabbbbb","bbbbbaabbbbb","bbbbebbebbbb","bbbbbeebbbbb",".bbbbbbbbbb.","..bbbbbbbb.."]},
+{t:"a",n:"토끼",g:[".bb......bb.",".bb......bb.",".bab....bab.",".bab....bab.","..bbbbbbbb..",".bbbbbbbbbb.",".bbebbbbebb.",".bbbbbbbbbb.",".bbbbaabbbb.",".bbbbeebbbb.","..bbbbbbbb..","............"]},
+{t:"a",n:"개구리",g:["..bb....bb..",".bbeb..bebb.",".bbbb..bbbb.",".bbbbbbbbbb.","bbbbbbbbbbbb","bbbbbbbbbbbb","baabbbbbbaab","bbbbbbbbbbbb","beeeeeeeeeeb","bbbbbbbbbbbb",".bbbbbbbbbb.","............"]},
+{t:"a",n:"물고기",g:["............","............","....aaaa....","..bbbbbbb.cc",".bbbbbbbbbcc","bebbbbbbbbcc","bbbbbbbbbbcc",".bbbbbbbbbcc","..bbbbbbb.cc","....aaaa....","............","............"]},
+{t:"a",n:"나비",g:["..e......e..","...e....e...",".aa..ee..aa.","aabb.ee.bbaa","abbb.ee.bbba","abbb.ee.bbba",".abb.ee.bba.","..aa.ee.aa..","...a....a...","............","............","............"]},
+{t:"d",n:"공룡",g:["......bbbb..",".....bbbbbb.",".....bbebbb.",".....bbbbbbb","..aabbbbbb..",".aabbbbbbb..","bbbbbbbbbb..","bbbbbbbbbb..",".bbbbbbbbb..",".bb.bb.bbb..",".cc.cc.ccc..","............"]},
+{t:"d",n:"목긴 공룡",g:["......bb....",".....bbeb...",".....bbbb...","....bb......","....bb......","...bbbbbbb..","..bbaabbaab.","bbbbbbbbbbb.","bbbbbbbbbbb.",".bb.bb.bb.b.",".cc.cc.cc.c.","............"]},
+{t:"a",n:"강아지",g:["cc........cc","ccc......ccc","ccbbbbbbbbcc","ccbbbbbbbbcc","bbebbbbbbebb","bbbbbbbbbbbb","bbbbaaaabbbb","bbbbaeeabbbb","bbbbaaaabbbb","bbbbbccbbbbb",".bbbbccbbbb.","..bbbbbbbb.."]},
+{t:"a",n:"펭귄",g:["....eeee....","...eeeeee...","..eaeeeeae..","...eeccee...","..eeaaaaee..",".eeaaaaaaee.",".eeaaaaaaee.",".eeaaaaaaee.","..eeaaaaee..","..eeeeeeee..","..cc....cc..","..cc....cc.."]},
+{t:"a",n:"곰",g:[".bb......bb.","baab....baab","bbbbbbbbbbbb",".bbbbbbbbbb.",".bbebbbbebb.",".bbbbbbbbbb.",".bbbaaaabbb.",".bbbaeeabbb.",".bbbaaaabbb.",".bbbbbbbbbb.","..bbbbbbbb..","............"]},
+{t:"a",n:"오리",g:["....bbbb....","...bbbbbb...","...bbbebbccc","...bbbbbbcc.","....bbbb....","..bbbbbbbb..","abbbbbbbbbb.","aabbbbbbbbb.",".bbbbbbbbbb.","..bbbbbbbb..","....cc.cc...","...ccc.ccc.."]},
+{t:"a",n:"사자",g:["..aaaaaaaa..",".aaaaaaaaaa.","aaabbbbbbaaa","aabbbbbbbbaa","aabebbbbebaa","aabbbbbbbbaa","aabbbccbbbaa","aabbbeebbbaa","aaabbbbbbaaa",".aaabbbbaaa.",".aaaaaaaaaa.","..aaaaaaaa.."]},
+{t:"a",n:"돼지",g:[".cc......cc.",".ccc....ccc.","..bbbbbbbb..",".bbbbbbbbbb.",".bbebbbbebb.",".bbbbbbbbbb.",".bbbaaaabbb.",".bbbeaaebbb.",".bbbaaaabbb.",".bbbbbbbbbb.","..bbbbbbbb..","............"]},
+{t:"a",n:"거북이",g:["............","....bbbb....","..bbabbabb..",".bbabbbbabbc",".bbbbaabbbce",".bbabbbbabb.","..bbabbabb..","..cc....cc..","............","............","............","............"]},
+{t:"a",n:"벌",g:["..e......e..","...e....e...","..cc.bb.cc..",".cccbbbbccc.","..cbbbbbbc..","...eeeeee...","...bbbbbb...","...eeeeee...","...bbbbbb...","....eeee....",".....ee.....","............"]},
+{t:"a",n:"무당벌레",g:["...e....e...","....eeee....","..bbbeebbb..",".baabeebaab.",".baabeebaab.",".bbbbeebbbb.",".bbaaeeaabb.",".bbaaeeaabb.",".bbbbeebbbb.","..bbbeebbb..","...bbeebb...","....bbbb...."]},
+{t:"a",n:"코끼리",g:["bbbb....bbbb","bbbbbbbbbbbb","baabbbbbbaab","baabebbebaab","baabbbbbbaab","bbbbbbbbbbbb","..bbbbbbbb..","...bbaabb...","...bbaabb...","...bbaabb...","...bbbbbb...","....bbbb...."]},
+{t:"d",n:"트리케라톱스",g:["............","......aa....",".....aabbbc.","....aabebbcc","bbbbbbbbbbb.","bbbbbbbbbbb.",".bbbbbbbbbb.",".bbbbbbbbbb.",".bb..bb.bb..",".cc..cc.cc..","............","............"]},
+{t:"d",n:"티라노사우루스",g:["....bbbbbb..","...bbbbbbbb.","...bbbebbbbb","...bbbbbbbbb","...bbbaaaaa.","..bbbbbbb...","bbbbbbbbbcc.","bbbbbbbbb...",".bbbbbbbb...","..bbb.bbb...","..ccc.ccc...","............"]},
+{t:"d",n:"스테고사우루스",g:["............","...a.aa.a...","..aaaaaaaa..",".bbbbbbbbbbb","bbebbbbbbbbb",".bbbbbbbbbcc","..bbbbbbbbbc","..bb.bb.bb..","..cc.cc.cc..","............","............","............"]},
+{t:"d",n:"프테라노돈",g:["b..........b","bb...aa...bb","bbb.aeea.bbb","bbbbaaaabbbb","bbbbbccbbbbb",".bbbbccbbbb.","..bbbaabbb..","...bbaabb...","....baab....",".....aa.....","............","............"]},
+{t:"d",n:"공룡 알",g:["............","....bbbb....","...bbbbbb...","..bbabbabb..",".bbbbbbbbbb.",".ebebebebeb.",".bbbbabbbbb.",".bbabbbbabb.","..bbbbbbbb..","...bbbbbb...","....bbbb....","............"]},
+{t:"x",n:"하트",g:["............","..bbb..bbb..",".bbbbbbbbbb.","bbaabbbbbbbb","bbabbbbbbbbb","bbbbbbbbbbbb",".bbbbbbbbbb.","..bbbbbbbb..","...bbbbbb...","....bbbb....",".....bb.....","............"]},
+{t:"x",n:"별",g:[".....bb.....",".....bb.....","....bbbb....","bbbbbbbbbbbb",".bbebbbbebb.","..bbbeebbb..","...bbbbbb...","...bbbbbb...","..bbb..bbb..",".bbb....bbb.",".bb......bb.","............"]},
+{t:"x",n:"꽃",g:["....bbbb....",".bb.bbbb.bb.",".bbbbaabbbb.","..bbaaaabb..",".bbbbaabbbb.",".bb.bbbb.bb.","....bbbb....",".....cc.....","..cc.cc.cc..","...cccccc...",".....cc.....",".....cc....."]},
+{t:"x",n:"집",g:[".....bb.....","....bbbb....","...bbbbbb...","..bbbbbbbb..",".bbbbbbbbbb.","bbbbbbbbbbbb",".aaaaaaaaaa.",".aaeaaaaeaa.",".aaaaccaaaa.",".aaaaccaaaa.",".aaaaccaaaa.","............"]},
+{t:"x",n:"로켓",g:[".....bb.....","....bbbb....","...bbbbbb...","...aaaaaa...","...aaeeaa...","...aaeeaa...","...aaaaaa...","..baaaaaab..",".bbaaaaaabb.",".bb.cccc.bb.",".....cc.....",".....cc....."]},
+{t:"x",n:"사과",g:[".....e.cc...",".....ecc....","..bbbbbbbb..",".bbbbbbbbbb.",".baabbbbbbb.",".babbbbbbbb.",".bbbbbbbbbb.",".bbbbbbbbbb.","..bbbbbbbb..","..bbbbbbbb..","...bb..bb...","............"]},
+{t:"x",n:"아이스크림",g:["....bbbb....","...bbbbbb...","..bbbbbbbb..","..bbbbbbbb..",".aaaaaaaaaa.",".aaaaaaaaaa.","..cccccccc..","...cccccc...","....cccc....",".....cc.....","............","............"]},
+{t:"v",n:"자동차",g:["............","............","...bbbbbb...","..baabaabb..",".bbbbbbbbbb.","bbbbbbbbbbbb","bbbbbbbbbbbb",".eeeebbeeee.",".ecce..ecce.",".eeee..eeee.","............","............"]},
+{t:"v",n:"버스",g:["............","bbbbbbbbbbbb","baabaabaabbb","baabaabaabbb","bbbbbbbbbbbb","bbbbbbbbbbbb","bbbbbbbbbbbc","bbbbbbbbbbbb",".eeee..eeee.",".ecce..ecce.",".eeee..eeee.","............"]},
+{t:"v",n:"트럭",g:["............","aaaaaaaa....","aaaaaaaa.bb.","aaaaaaaabccb","aaaaaaaabbbb","aaaaaaaabbbb","aaaaaaaabbbc","bbbbbbbbbbbb",".ee..ee..ee.",".ee..ee..ee.","............","............"]},
+{t:"v",n:"소방차",g:["............","............","aaaaaaaaa...","bbbbbbbbbccb","bbbbbbbbbccb","bbbbbbbbbbbb","baaaaaabbbbb","bbbbbbbbbbbb",".eeee..eeee.",".ecce..ecce.",".eeee..eeee.","............"]},
+{t:"v",n:"경찰차",g:["............",".....cc.....","...bbbbbb...","..baabaabb..",".bbbbbbbbbb.","bbbbbbbbbbbb","baaaaaaaaaab",".eeeebbeeee.",".ecce..ecce.",".eeee..eeee.","............","............"]},
+{t:"v",n:"자전거",g:["............","............","...aa....cc.","....bb..bb..","....bbbbbb..",".eee.bb.eee.","e...ebbe...e","e...ebbe...e",".eee.bb.eee.","............","............","............"]},
+{t:"v",n:"비행기",g:[".....bb.....","....bbbb....","....beeb....","....bbbb....","aaaabbbbaaaa",".aaabbbbaaa.","..aabbbbaa..","....bbbb....",".....bb.....","...ccbbcc...","....cbbc....",".....bb....."]},
+{t:"v",n:"배",g:[".....c......","....cc......","....ee......","..aaaaaa....","..aeaeaea...","..aaaaaaa...","bbbbbbbbbbbb",".bbbbbbbbbb.","..bbbbbbbb..","cccccccccccc","cccccccccccc","cccccccccccc"]},
+{t:"v",n:"기차",g:["..ee........","..ee....bbbb","bbbbbbbbbaab","bbbbbbbbbaab","bbbbbbbbbbbb","bbbbbbbbbbbc","aaaaaaaaaaaa",".eeee..eeee.",".ecce..ecce.",".eeee..eeee.","............","............"]},
+{t:"v",n:"헬리콥터",g:["............","eeeeeeeeeeee",".....ee.....","...bbbbbb...","..baabbbbbcc","..bbbbbbbbc.","...bbbbbb...","...e....e...","..eeeeeeee..","............","............","............"]},
+{t:"v",n:"열기구",g:["....bbbb....","..bbbaabbb..",".bbbbaabbbb.","bbbbbaabbbbb","bbbbbaabbbbb","bbbbbaabbbbb",".bbbbaabbbb.","..bbbaabbb..","...e....e...","...e....e...","...cccccc...","...cccccc..."]}
+];
+const sel=document.getElementById("n");
+for(let i=1;i<=10;i++)sel.add(new Option(i+"장",i));
+sel.value=3;
+const pages=document.getElementById("pages");
+let cur=1;
+const shuf=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+function make(cat,idx){
+ const pool=T.filter(t=>cat==="all"||t.t===cat);
+ const t=pool[Math.floor(Math.random()*pool.length)];
+ const [cb,ca,cc,cg]=shuf([1,2,3,4,5,6,7,8]);
+ const map={b:cb,a:ca,c:cc,e:9,g:cg};
+ const flip=Math.random()<.5;
+ const pg=document.createElement("div");pg.className="page";
+ pg.innerHTML='<h2>'+idx+'. 숫자에 맞는 색을 칠해 보세요!</h2><div class="name">이름: <span>&nbsp;</span> 날짜: <span>&nbsp;</span></div><div class="leg"></div><div class="grid"></div>';
+ const leg=pg.querySelector(".leg"),grid=pg.querySelector(".grid");
+ Object.keys(COL).forEach(k=>{
+  const s=document.createElement("div");s.className="sw";s.dataset.k=k;
+  s.innerHTML=k+' <i style="background:'+COL[k][1]+'"></i>';
+  s.onclick=()=>{cur=+k;syncLeg()};
+  leg.appendChild(s);
+ });
+ t.g.forEach(row=>{
+  const r=flip?[...row].reverse():[...row];
+  r.forEach(ch=>{
+   const d=document.createElement("div");d.className="c";
+   {
+    const n=map[ch==="."?"g":ch];d.dataset.n=n;d.textContent=n;
+    d.style.setProperty("--k",COL[n][1]);d.style.setProperty("--t",COL[n][2]);
+    d.onclick=()=>{d.style.background=d.style.background?"":COL[cur][1];d.style.color=d.style.background?COL[cur][2]:"";};
+   }
+   grid.appendChild(d);
+  });
+ });
+ return pg;
+}
+function syncLeg(){document.querySelectorAll(".sw").forEach(s=>s.classList.toggle("on",+s.dataset.k===cur))}
+function build(){
+ pages.innerHTML="";
+ for(let i=1;i<=+sel.value;i++)pages.appendChild(make(document.getElementById("cat").value,i));
+ syncLeg();
+}
+document.getElementById("go").onclick=build;
+document.getElementById("ans").onchange=e=>pages.classList.toggle("ans",e.target.checked);
+build();
+</script>
+</body>
+</html>
